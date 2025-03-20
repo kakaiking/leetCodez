@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Cube</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+        }
+        .container {
+            text-align: center;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* Disable touch scrolling */
+        }
+        input {
+            width: 60px;
+            padding: 5px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .input-group {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .deviation-text {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Interactive 3D Cube</h1>
+        <div class="input-group">
+            <label for="cube-size">Cube Size:</label>
+            <input type="number" id="cube-size" placeholder="3" min="1">
+            <button onclick="initializeCube()">Generate Cube</button>
+        </div>
+        <svg id="cube-svg"></svg>
+        <div class="deviation-text" id="deviation-text">Deviation: x: 0, y: 0, z: 0</div>
+        <div class="input-group" id="rotation-inputs" style="display: none;">
+            <label for="x-axis">X Axis:</label>
+            <input type="number" id="x-axis" placeholder="0">
+            <label for="y-axis">Y Axis:</label>
+            <input type="number" id="y-axis" placeholder="0">
+            <label for="z-axis">Z Axis:</label>
+            <input type="number" id="z-axis" placeholder="0">
+            <button onclick="rotateAndReset()">Submit</button>
+        </div>
+    </div>
+    <script>
+        let cube = [];
+        let edges = [];
+        let isDragging = false;
+        let startX, startY;
+        let currentAngleX = 0, currentAngleY = 0, currentAngleZ = 0;
+        const baseAngleX = 15, baseAngleY = 15; // Minor offset for 3D effect
+        let selectedVertexIndex = null;
+
+        // Initialize cube based on user input
+        function initializeCube() {
+            const size = parseInt(document.getElementById("cube-size").value) || 3;
+            cube = [];
+            edges = [];
+
+            // Generate cube vertices
+            for (let x = -size + 1; x <= size - 1; x += 2) {
+                for (let y = -size + 1; y <= size - 1; y += 2) {
+                    for (let z = -size + 1; z <= size - 1; z += 2) {
+                        cube.push({ x, y, z });
+                    }
+                }
+            }
+
+            // Generate cube edges
+            const layerSize = size * size;
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    for (let k = 0; k < size; k++) {
+                        const index = i * layerSize + j * size + k;
+                        if (k < size - 1) edges.push([index, index + 1]); // Horizontal edges
+                        if (j < size - 1) edges.push([index, index + size]); // Vertical edges
+                        if (i < size - 1) edges.push([index, index + layerSize]); // Depth edges
+                    }
+                }
+            }
+
+            // Show rotation inputs
+            document.getElementById("rotation-inputs").style.display = "flex";
+
+            // Render cube in a slightly rotated position for better 3D effect
+            const rotatedCube = rotateCube(cube, baseAngleX, baseAngleY, 0);
+            renderCube(rotatedCube);
+        }
+
+        // Rotation functions
+        function rotateX(point, angle) {
+            const rad = angle * (Math.PI / 180);
+            const y = point.y * Math.cos(rad) - point.z * Math.sin(rad);
+            const z = point.y * Math.sin(rad) + point.z * Math.cos(rad);
+            return { x: point.x, y, z };
+        }
+
+        function rotateY(point, angle) {
+            const rad = angle * (Math.PI / 180);
+            const x = point.x * Math.cos(rad) + point.z * Math.sin(rad);
+            const z = -point.x * Math.sin(rad) + point.z * Math.cos(rad);
+            return { x, y: point.y, z };
+        }
+
+        function rotateZ(point, angle) {
+            const rad = angle * (Math.PI / 180);
+            const x = point.x * Math.cos(rad) - point.y * Math.sin(rad);
+            const y = point.x * Math.sin(rad) + point.y * Math.cos(rad);
+            return { x, y, z: point.z };
+        }
+
+        function rotateCube(cube, angleX, angleY, angleZ) {
+            return cube.map(point => {
+                let rotated = rotateX(point, angleX);
+                rotated = rotateY(rotated, angleY);
+                rotated = rotateZ(rotated, angleZ);
+                return rotated;
+            });
+        }
+
+        // Project 3D to 2D
+        function project(point) {
+            const scale = 50; // Smaller scale for better visibility
+            const x = point.x * scale + 200;
+            const y = point.y * scale + 200;
+            return { x, y };
+        }
+
+        // Render cube with edges and filled vertices
+        function renderCube(cube) {
+            const svg = document.getElementById("cube-svg");
+            svg.innerHTML = ""; // Clear previous frame
+
+            // Draw edges
+            edges.forEach(edge => {
+                const p1 = project(cube[edge[0]]);
+                const p2 = project(cube[edge[1]]);
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", p1.x);
+                line.setAttribute("y1", p1.y);
+                line.setAttribute("x2", p2.x);
+                line.setAttribute("y2", p2.y);
+                line.setAttribute("stroke", "#007bff");
+                line.setAttribute("stroke-width", "1");
+                svg.appendChild(line);
+            });
+
+            // Draw vertices
+            cube.forEach((point, index) => {
+                const projected = project(point);
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", projected.x);
+                circle.setAttribute("cy", projected.y);
+                circle.setAttribute("r", index % 2 === 0 ? 3 : 2); // Outer vertices are 3px
+                circle.setAttribute("fill", index % 2 === 0 ? "darkred" : "black");
+                circle.setAttribute("data-index", index);
+                svg.appendChild(circle);
+            });
+        }
+
+        // Update deviation text and input fields
+        function updateDeviationText() {
+            document.getElementById("deviation-text").textContent =
+                Deviation: x: ${currentAngleX.toFixed(1)}, y: ${currentAngleY.toFixed(1)}, z: ${currentAngleZ.toFixed(1)};
+            document.getElementById("x-axis").value = currentAngleX.toFixed(1);
+            document.getElementById("y-axis").value = currentAngleY.toFixed(1);
+            document.getElementById("z-axis").value = currentAngleZ.toFixed(1);
+        }
+
+        // Handle vertex selection and dragging
+        const svg = document.getElementById("cube-svg");
+        svg.addEventListener("mousedown", (e) => {
+            if (e.target.tagName === "circle") {
+                isDragging = true;
+                selectedVertexIndex = parseInt(e.target.getAttribute("data-index"));
+                startX = e.clientX;
+                startY = e.clientY;
+            }
+        });
+        svg.addEventListener("mousemove", (e) => {
+            if (isDragging && selectedVertexIndex !== null) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                currentAngleY += dx * 0.5;
+                currentAngleX -= dy * 0.5;
+                startX = e.clientX;
+                startY = e.clientY;
+
+                const rotatedCube = rotateCube(cube, baseAngleX + currentAngleX, baseAngleY + currentAngleY, currentAngleZ);
+                renderCube(rotatedCube);
+                updateDeviationText();
+            }
+        });
+        svg.addEventListener("mouseup", () => {
+            isDragging = false;
+            selectedVertexIndex = null;
+        });
+        svg.addEventListener("mouseleave", () => {
+            isDragging = false;
+            selectedVertexIndex = null;
+        });
+
+        // Rotate and reset animation
+        function rotateAndReset() {
+            const angleX = parseFloat(document.getElementById("x-axis").value) || 0;
+            const angleY = parseFloat(document.getElementById("y-axis").value) || 0;
+            const angleZ = parseFloat(document.getElementById("z-axis").value) || 0;
+
+            const duration = 10000; // 10 seconds
+            const startTime = performance.now();
+
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                const currentAngleX = angleX * progress;
+                const currentAngleY = angleY * progress;
+                const currentAngleZ = angleZ * progress;
+
+                const rotatedCube = rotateCube(cube, baseAngleX + currentAngleX, baseAngleY + currentAngleY, currentAngleZ);
+                renderCube(rotatedCube);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Reset to base position after animation
+                    setTimeout(() => {
+                        currentAngleX = 0;
+                        currentAngleY = 0;
+                        currentAngleZ = 0;
+                        const baseCube = rotateCube(cube, baseAngleX, baseAngleY, 0);
+                        renderCube(baseCube);
+                        updateDeviationText();
+                    }, 1000);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+    </script>
+</body>
+</html>
