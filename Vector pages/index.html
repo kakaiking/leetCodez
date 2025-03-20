@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Cube Rotation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+        }
+        .container {
+            text-align: center;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        svg {
+            width: 400px;
+            height: 400px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            margin-bottom: 20px;
+        }
+        input {
+            width: 60px;
+            padding: 5px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>3D Cube Rotation</h1>
+        <svg id="cube-svg"></svg>
+        <div>
+            <label for="x-axis">X Axis:</label>
+            <input type="number" id="x-axis" placeholder="0">
+            <label for="y-axis">Y Axis:</label>
+            <input type="number" id="y-axis" placeholder="0">
+            <label for="z-axis">Z Axis:</label>
+            <input type="number" id="z-axis" placeholder="0">
+            <button onclick="rotateAndReset()">Submit</button>
+        </div>
+    </div>
+    <script>
+        // Cube initialization
+        const cubeSize = 3;
+        const cube = [];
+
+        for (let x = -1; x <= 1; x++) {
+            for (let y = -1; y <= 1; y++) {
+                for (let z = -1; z <= 1; z++) {
+                    cube.push({ x, y, z });
+                }
+            }
+        }
+
+        // Edges of the cube (connections between vertices)
+        const edges = [
+            // Bottom face
+            [0, 1], [1, 2], [2, 5], [5, 8], [8, 7], [7, 6], [6, 3], [3, 0],
+            // Top face
+            [18, 19], [19, 20], [20, 23], [23, 26], [26, 25], [25, 24], [24, 21], [21, 18],
+            // Vertical edges
+            [0, 18], [1, 19], [2, 20], [5, 23], [8, 26], [7, 25], [6, 24], [3, 21]
+        ];
+
+        // Rotation functions
+        function rotateX(point, angle) {
+            const rad = angle * (Math.PI / 180);
+            const y = point.y * Math.cos(rad) - point.z * Math.sin(rad);
+            const z = point.y * Math.sin(rad) + point.z * Math.cos(rad);
+            return { x: point.x, y, z };
+        }
+
+        function rotateY(point, angle) {
+            const rad = angle * (Math.PI / 180);
+            const x = point.x * Math.cos(rad) + point.z * Math.sin(rad);
+            const z = -point.x * Math.sin(rad) + point.z * Math.cos(rad);
+            return { x, y: point.y, z };
+        }
+
+        function rotateZ(point, angle) {
+            const rad = angle * (Math.PI / 180);
+            const x = point.x * Math.cos(rad) - point.y * Math.sin(rad);
+            const y = point.x * Math.sin(rad) + point.y * Math.cos(rad);
+            return { x, y, z: point.z };
+        }
+
+        function rotateCube(cube, angleX, angleY, angleZ) {
+            return cube.map(point => {
+                let rotated = rotateX(point, angleX);
+                rotated = rotateY(rotated, angleY);
+                rotated = rotateZ(rotated, angleZ);
+                return rotated;
+            });
+        }
+
+        // Project 3D to 2D
+        function project(point) {
+            const scale = 100;
+            const x = point.x * scale + 200;
+            const y = point.y * scale + 200;
+            return { x, y };
+        }
+
+        // Render cube with edges
+        function renderCube(cube) {
+            const svg = document.getElementById("cube-svg");
+            svg.innerHTML = ""; // Clear previous frame
+
+            // Draw edges
+            edges.forEach(edge => {
+                const p1 = project(cube[edge[0]]);
+                const p2 = project(cube[edge[1]]);
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", p1.x);
+                line.setAttribute("y1", p1.y);
+                line.setAttribute("x2", p2.x);
+                line.setAttribute("y2", p2.y);
+                line.setAttribute("stroke", "#007bff");
+                line.setAttribute("stroke-width", "1");
+                svg.appendChild(line);
+            });
+
+            // Draw vertices
+            cube.forEach(point => {
+                const projected = project(point);
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", projected.x);
+                circle.setAttribute("cy", projected.y);
+                circle.setAttribute("r", 3);
+                circle.setAttribute("fill", "black");
+                svg.appendChild(circle);
+            });
+        }
+
+        // Rotate and reset animation
+        function rotateAndReset() {
+            const angleX = parseFloat(document.getElementById("x-axis").value) || 0;
+            const angleY = parseFloat(document.getElementById("y-axis").value) || 0;
+            const angleZ = parseFloat(document.getElementById("z-axis").value) || 0;
+
+            const duration = 3000; // 3 seconds
+            const startTime = performance.now();
+
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                const currentAngleX = angleX * progress;
+                const currentAngleY = angleY * progress;
+                const currentAngleZ = angleZ * progress;
+
+                const rotatedCube = rotateCube(cube, currentAngleX, currentAngleY, currentAngleZ);
+                renderCube(rotatedCube);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Reset to base position after animation
+                    setTimeout(() => {
+                        renderCube(cube);
+                    }, 1000);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Initial render
+        renderCube(cube);
+    </script>
+</body>
+</html>
